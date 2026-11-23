@@ -1,0 +1,19 @@
+# 本地语料与运行产物一律不进仓库
+data/
+*.jsonl
+*.out
+!examples/*.md
+
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# 编辑器
+.vscode/
+.idea/
