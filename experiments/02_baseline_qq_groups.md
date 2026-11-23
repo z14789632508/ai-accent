@@ -34,6 +34,26 @@
 - **句末标点**：`。！？!?…~～.」』）)】` 与引号。QQ 里大量消息不以标点结尾，这是真人特征而不是噪声。
 - **句子切分**：按 `。！？；…\n` 切，长度以字符计。`sentence_len_entropy` 用 10 字一档的分箱。
 
+## 两份基线，别拿错
+
+| register | 语料 | 规模 | 带怎么算 | 什么时候用 |
+|---|---|---|---|---|
+| `chat` | QQ 一对一私聊（本人 2,757 条 + 9 位好友 379 条） | 694 turns / 2,757 chunks | `bootstrap_turns` + **±40% 带宽下限** | 量一个角色号/助手的私聊回复 |
+| `chat_group` | QQ 群聊，77 个群、43 个说话人 | 68,709 turns / 523,962 chunks | `across_speakers`（说话人之间取分位） | 量群聊发言、或者研究群语境 |
+
+第一版只有 `chat_group`，却拿它去量一对一私聊的回复 —— 这本身就是一句可以被质疑的话
+（"你比的是私聊 vs 群聊，不是模型 vs 人"）。所以补了私聊语料，并把 `chat` 改成私聊口径。
+
+`chat` 的难处是**只有一个说话人够 200 条**，说话人之间的离散估不出来。
+纯 bootstrap 只会得到"这一个说话人的抽样误差"（`chunk_len_p50` 的带窄到 12–12），
+任何样本都会被判"明显偏离"，这是假精度。所以：
+
+- `band_method: bootstrap_turns`：按 turn 重采样到与评估规模相同的 300 个 turn；
+- `band_floor: 0.4`：再把带强制加宽到至少 ±40%（两侧各自加宽，不改变中点）。
+
+宁可放宽、不要制造"±0.5 就算明显"的假精度。代价是这套带**偏保守**：
+它抓得住"89% 恰好三段"这种量级，抓不住 10% 量级的细微差别。
+
 ## 已知偏差（写出来，别假装没有）
 
 1. **群聊 ≠ 私聊。** 群聊里有大量"草""笑死""1""？"这类一到三字的应答，会压低 `chunk_len_p50`、抬高短句占比。所以 `chunk_len_p50` 的 band（7–16）对私聊场景偏严——私家对话天然更长。**跨场景比这个数要小心。**
@@ -44,10 +64,13 @@
 ## 复现
 
 ```bash
-# 1) 用本地 jsonl（每行：{"ts":秒,"g":群号,"uid":发送者,"t":文本}）重建基线
-python scripts/build_baseline_from_qq.py data/group_msgs.jsonl --min-msgs 300
+# 1) 私聊基线（每行：{"ts":秒,"uid":发送者,"peer":对方,"t":文本}）
+python scripts/build_baseline_dm.py data/dm_human.jsonl --register chat --min-msgs 200
 
-# 2) 体检
+# 2) 群聊基线（每行：{"ts":秒,"g":群号,"uid":发送者,"t":文本}）
+python scripts/build_baseline_from_qq.py data/group_msgs.jsonl --register chat_group --min-msgs 300
+
+# 3) 体检
 aiaccent audit data/model_replies.jsonl --register chat --prescribe
 ```
 
@@ -56,9 +79,12 @@ aiaccent audit data/model_replies.jsonl --register chat --prescribe
 ```json
 {
  "register": "chat",
- "source": "QQ 群聊，77 个群、43 个说话人（每人 ≥300 条），共 526350 条消息",
- "n_speakers": 43, "n_turns": 68709, "n_chunks": 523962,
+ "source": "QQ 一对一私聊（本人 2757 条 + 9 位好友 379 条，共 3136 条文本消息）",
+ "band_method": "bootstrap_turns", "band_floor": 0.4,
+ "n_speakers": 1, "n_turns": 694, "n_chunks": 2757,
  "sentence_bin": 10,
- "metrics": {"chunk_len_p50": {"p10": 7, "p50": 9, "p90": 16}, "...": {}}
+ "metrics": {"chunk_len_p50": {"p10": 7.2, "p50": 12.0, "p90": 15.84, "q": [0]}, "...": {}}
 }
 ```
+
+`q` 是 101 点的分位表，`pct` 列就是在它上面插值出来的；没有它就只能三点线性插值（粗一些）。

@@ -57,20 +57,38 @@ class TestBaseline(unittest.TestCase):
 
     def test_dev_sign_and_magnitude(self):
         rows = B.compare({"chunk_len_p50": 25}, self._base())
-        name, v, lo, mid, hi, verdict, dev = rows[0]
-        self.assertEqual(verdict, "above")
-        self.assertAlmostEqual(dev, (25 - 9) / (16 - 9), places=2)
+        r = rows[0]
+        self.assertEqual(r["verdict"], "above")
+        self.assertAlmostEqual(r["dev"], (25 - 9) / (16 - 9), places=2)
+        self.assertEqual(r["pct"], 90.0)      # 无分位表时，超出 p90 记 90
 
     def test_dev_below(self):
         rows = B.compare({"chunk_len_p50": 2}, self._base())
-        _, _, _, mid, _, verdict, dev = rows[0]
-        self.assertEqual(verdict, "below")
-        self.assertAlmostEqual(dev, (2 - mid) / (mid - 7), places=2)
+        r = rows[0]
+        self.assertEqual(r["verdict"], "below")
+        self.assertAlmostEqual(r["dev"], (2 - 9) / (9 - 7), places=2)
+        self.assertEqual(r["pct"], 10.0)
 
     def test_in_band_is_zero(self):
         rows = B.compare({"chunk_len_p50": 10}, self._base())
-        self.assertEqual(rows[0][5], "in")
-        self.assertEqual(rows[0][6], 0.0)
+        r = rows[0]
+        self.assertEqual(r["verdict"], "in")
+        self.assertEqual(r["dev"], 0.0)
+
+    def test_pct_from_quantile_grid(self):
+        q = [float(i) for i in range(101)]     # p10=10, p50=50, p90=90
+        b = {"metrics": {"chunk_len_p50": {"p10": 10, "p50": 50, "p90": 90, "q": q}}}
+        r = B.compare({"chunk_len_p50": 25.5}, b)[0]
+        self.assertAlmostEqual(r["pct"], 25.5, places=1)
+
+    def test_experimental_hidden_by_default(self):
+        b = {"metrics": {"chunk_len_p50": {"p10": 7, "p50": 9, "p90": 16},
+                         "sentence_len_entropy": {"p10": 1, "p50": 2, "p90": 3}}}
+        rep = {"chunk_len_p50": 9, "sentence_len_entropy": 2}
+        names = [r["metric"] for r in B.compare(rep, b)]
+        self.assertNotIn("sentence_len_entropy", names)
+        names = [r["metric"] for r in B.compare(rep, b, experimental=True)]
+        self.assertIn("sentence_len_entropy", names)
 
 
 class TestIO(unittest.TestCase):

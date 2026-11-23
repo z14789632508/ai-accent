@@ -99,6 +99,32 @@ def measure(turns, sentence_bin=10):
     }
 
 
+def bootstrap_ci(turns, names, reps=400, alpha=0.05, seed=7, sentence_bin=10):
+    """对已测语料做 turn 级 bootstrap，返回 {metric: (lo, hi)}。
+
+    用途：报告里那个偏离量本身也有噪声（300–500 个 turn 的 CV 估计并不稳），
+    给出置信区间，读者才能判断"差 0.05"是不是真的差。
+    """
+    import random
+    rnd = random.Random(seed)
+    n = len(turns)
+    acc = {k: [] for k in names}
+    for _ in range(reps):
+        r = measure([turns[rnd.randrange(n)] for _ in range(n)], sentence_bin=sentence_bin)
+        for k in names:
+            if k in r:
+                acc[k].append(r[k])
+    out = {}
+    for k, xs in acc.items():
+        if len(xs) < 10:
+            continue
+        a = sorted(xs)
+        lo = a[int(len(a) * alpha / 2)]
+        hi = a[min(len(a) - 1, int(len(a) * (1 - alpha / 2)))]
+        out[k] = (lo, hi)
+    return out
+
+
 # 指标方向：+1 越大越像人，-1 越小越像人，0 看区间
 DIRECTION = {
     "chunk_len_p50": 0,

@@ -4,9 +4,11 @@
 设计规则（写进 README 也写进这里，防止以后自己破例）：
 - register 是一等公民，baselines/<register>.json 各自独立，没有默认值；
 - 基线来自真实语料，不能用自己造的样本冒充；
-- 存的是每群/每段的分布带（p10–p90），不是一句话结论。
+- 存的是每个指标的分位（p10–p90 + 101 点分位表），不是一句话结论；
+- band 的口径必须写在文件里（band_method），因为它决定"偏离一个带宽"是什么意思。
 """
 
+import bisect
 import json
 import os
 
@@ -25,6 +27,7 @@ CORE = [
     "within_turn_cv_median",
 ]
 
+# 先别上主表：分箱口径一换就不可比（见 experiments/02）
 EXPERIMENTAL = ["sentence_len_entropy"]
 
 
@@ -46,30 +49,63 @@ def list_registers():
     return sorted(x[:-5] for x in os.listdir(BASE_DIR) if x.endswith(".json"))
 
 
-SEVERE = 2.0   # 偏离达到 2 个带宽算"明显"：band 宽 = p90-p50 / p50-p10
+SEVERE = 2.0   # 偏离达到 2 个带宽算"明显"
 
 
-def compare(report, baseline):
-    """返回 [(metric, observed, lo, mid, hi, verdict, dev)]
+def _pct(entry, v):
+    """v 在人类分布里的百分位（0–100）。有 101 点分位表就用表，否则按三点插值。"""
+    q = entry.get("q")
+    if q:
+        i = bisect.bisect_left(q, v)
+        if i <= 0:
+            return 0.0
+        if i >= len(q):
+            return 100.0
+        lo, hi = q[i - 1], q[i]
+        frac = 0.0 if hi == lo else (v - lo) / (hi - lo)
+        return round((i - 1 + frac) * 100.0 / (len(q) - 1), 1)
+    p10, p50, p90 = entry["p10"], entry["p50"], entry["p90"]
+    if v <= p10:
+        return 10.0
+    if v >= p90:
+        return 90.0
+    if v <= p50:
+        w = (p50 - p10) or 1e-9
+        return round(10 + 40 * (v - p10) / w, 1)
+    w = (p90 - p50) or 1e-9
+    return round(50 + 40 * (v - p50) / w, 1)
 
-    dev = 偏离量，单位是"一个带宽"。above 用 (v-p50)/(p90-p50)，
-    below 用 (v-p50)/(p50-p10)。在带内为 0。
-    方向和幅度都要看：方向说明像不像模型，幅度说明是不是噪声。
+
+def compare(report, baseline, experimental=False):
+    """返回 [{metric, value, p10, p50, p90, pct, dev, verdict}]
+
+    - pct：这个值在人类分布里的百分位。**优先看它**：0.3% 比"偏离 25 个带宽"直观，
+      也不受带宽两侧不对称的影响。
+    - dev：偏离量，单位是"该侧带宽"（above 用 p90-p50，below 用 p50-p10）。
+      两侧带宽本来就不一样宽，所以 dev 只能同向比较，不能跨指标比较。
     """
+    names = CORE + (EXPERIMENTAL if experimental else [])
     rows = []
     metrics = baseline["metrics"]
-    for name in CORE + EXPERIMENTAL:
+    for name in names:
         if name not in report or name not in metrics:
             continue
         m = metrics[name]
         v = report[name]
         lo, mid, hi = m["p10"], m["p50"], m["p90"]
-        dev = 0.0
-        if v > hi and hi > mid:
-            verdict, dev = "above", (v - mid) / (hi - mid)
-        elif v < lo and mid > lo:
-            verdict, dev = "below", (v - mid) / (mid - lo)
-        else:
-            verdict = "in"
-        rows.append((name, v, lo, mid, hi, verdict, round(dev, 2)))
+        verdict, dev = "in", 0.0
+        if v > hi:
+            verdict = "above"
+            dev = (v - mid) / ((hi - mid) or 0.5)
+        elif v < lo:
+            verdict = "below"
+            dev = (v - mid) / ((mid - lo) or 0.5)
+        rows.append({
+            "metric": name,
+            "value": v,
+            "p10": lo, "p50": mid, "p90": hi,
+            "pct": _pct(m, v),
+            "dev": round(dev, 2),
+            "verdict": verdict,
+        })
     return rows

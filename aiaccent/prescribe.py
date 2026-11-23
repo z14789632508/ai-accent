@@ -87,15 +87,17 @@ def advise(register, report, baseline, rows, provider="generic"):
             "%s 后端上 %s 不生效（API 已弃用或固定值），别指望它们；形状只能靠提示与语料压。"
             % (provider, " / ".join(out["ineffective"])))
     out["shape_card"] = shape_card(register, report, baseline)
-    rows = sorted(rows, key=lambda r: -abs(r[6]))
-    for name, v, lo, mid, hi, verdict, dev in rows:
-        if verdict == "in":
+    rows = sorted(rows, key=lambda r: -abs(r["dev"]))
+    for r in rows:
+        if r["verdict"] == "in":
             continue
-        tpl = FLAG.get((name, verdict))
+        tpl = FLAG.get((r["metric"], r["verdict"]))
         if not tpl:
             continue      # 反方向偏离（比人还随意）不是八股，不提示
-        tag = "明显" if abs(dev) >= 2.0 else "轻微"
-        out["notes"].append("[%s %.1f×带宽] " % (tag, abs(dev)) + tpl.format(v=v, mid=mid, lo=lo, hi=hi))
+        tag = "明显" if abs(r["dev"]) >= 2.0 else "轻微"
+        out["notes"].append(
+            "[%s %.1f×带宽 · 人类百分位 %.1f%%] " % (tag, abs(r["dev"]), r["pct"])
+            + tpl.format(v=r["value"], mid=r["p50"], lo=r["p10"], hi=r["p90"]))
     if not out["notes"]:
         out["notes"].append("核心指标没有出现「比人更整齐」的方向性偏离。")
     return out

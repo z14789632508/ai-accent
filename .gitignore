@@ -3,6 +3,7 @@ data/
 *.jsonl
 *.out
 !examples/*.md
+!examples/sample.jsonl
 
 __pycache__/
 *.pyc

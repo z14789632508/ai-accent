@@ -40,11 +40,15 @@ def turns_of(rows, gap=120):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("corpus")
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "baselines", "chat.json"))
+    ap.add_argument("--out", default="", help="默认写 baselines/<register>.json")
     ap.add_argument("--min-msgs", type=int, default=300, help="每个说话人至少多少条")
     ap.add_argument("--sentence-bin", type=int, default=10)
+    ap.add_argument("--register", default="chat_group")
+    ap.add_argument("--source", default="")
     args = ap.parse_args()
+    if not args.out:
+        args.out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                "baselines", "%s.json" % args.register)
 
     by_speaker = collections.defaultdict(list)
     groups = set()
@@ -69,15 +73,27 @@ def main():
     def q(a, p):
         return a[min(len(a) - 1, int(len(a) * p))]
 
+    def grid(a, n=101):
+        """101 点分位表：用来算"这个值在人类分布里的百分位"。"""
+        out = []
+        for i in range(n):
+            pos = (len(a) - 1) * i / (n - 1)
+            lo = int(pos)
+            hi = min(len(a) - 1, lo + 1)
+            frac = pos - lo
+            out.append(round(a[lo] + (a[hi] - a[lo]) * frac, 4))
+        return out
+
     metrics = {}
     for k in KEYS:
         a = sorted(r[k] for r in per_speaker.values())
-        metrics[k] = {"p10": q(a, .1), "p50": q(a, .5), "p90": q(a, .9)}
+        metrics[k] = {"p10": q(a, .1), "p50": q(a, .5), "p90": q(a, .9), "q": grid(a)}
 
     out = {
-        "register": "chat",
-        "source": "QQ 群聊，%d 个群、%d 个说话人（每人 ≥%d 条），共 %d 条消息"
-                  % (len(groups), len(per_speaker), args.min_msgs, total),
+        "register": args.register,
+        "band_method": "across_speakers",
+        "source": args.source or ("QQ 群聊，%d 个群、%d 个说话人（每人 ≥%d 条），共 %d 条消息"
+                                 % (len(groups), len(per_speaker), args.min_msgs, total)),
         "n_speakers": len(per_speaker),
         "n_turns": sum(r["n_turns"] for r in per_speaker.values()),
         "n_chunks": sum(r["n_chunks"] for r in per_speaker.values()),
