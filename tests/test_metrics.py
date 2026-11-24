@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from aiaccent import baseline as B  # noqa: E402
 from aiaccent import io as I  # noqa: E402
 from aiaccent import metrics as M  # noqa: E402
+from aiaccent import profile as PF  # noqa: E402
 
 
 class TestMetrics(unittest.TestCase):
@@ -109,6 +110,34 @@ class TestHedge(unittest.TestCase):
         self.assertGreater(r["hedge_per_kchar"], 0)
         self.assertEqual(M.DIRECTION["hedge_per_kchar"], -1)
         self.assertIn("hedge_per_kchar", B.CORE)
+
+
+class TestProfile(unittest.TestCase):
+    def _turns(self, n, text):
+        return [[text] for _ in range(n)]
+
+    def test_fingerprint_needs_both_halves(self):
+        # "哈哈哈" 只在前半段反复出现、后半段不出现 → 当成话题而不是口癖，剔掉
+        turns = [["哈哈哈，行"]] * 30 + [["今天吃了面"]] * 30
+        fp = PF.fingerprint(turns, crowd_turns=[["随便说说"]] * 20, min_count=5)
+        self.assertNotIn("哈哈哈", [e["ngram"] for e in fp])
+
+    def test_fingerprint_keeps_stable_habit(self):
+        turns = [["哈哈哈，行吧"]] * 60
+        fp = PF.fingerprint(turns, crowd_turns=[["随便说说吧"]] * 40, min_count=5)
+        self.assertIn("哈哈哈", [e["ngram"] for e in fp])
+
+    def test_fit_counts_reuse(self):
+        prof = {"fingerprint": [{"ngram": "哈哈哈", "count": 60, "per_kchar": 4.0,
+                                 "crowd_per_kchar": 0.0, "ratio": 4.0, "score": 1.0}]}
+        hit = PF.fit([["哈哈哈"], ["哈哈哈"], ["哈哈哈"]], prof)
+        self.assertEqual(hit["hits"], 1)
+        miss = PF.fit([["完全不带口癖的句子随便写一点东西"]], prof)
+        self.assertEqual(miss["hits"], 0)
+
+    def test_build_rejects_too_few_turns(self):
+        with self.assertRaises(ValueError):
+            PF.build([["a"]] * 3, "tiny", replicates=5)
 
 
 class TestIO(unittest.TestCase):

@@ -54,6 +54,43 @@ def list_registers():
 SEVERE = 2.0   # 偏离达到 2 个带宽算"明显"
 
 
+def quantile_list(values, n=101):
+    """0/1/2/…/100 分位表。"""
+    a = sorted(values)
+    if not a:
+        return [0.0] * n
+    out = []
+    for i in range(n):
+        pos = (len(a) - 1) * i / (n - 1)
+        lo = int(pos)
+        hi = min(len(a) - 1, lo + 1)
+        frac = pos - lo
+        out.append(round(a[lo] + (a[hi] - a[lo]) * frac, 4))
+    return out
+
+
+def band(values, floor=0.0):
+    """把一组重复采样得到的分位表包成 {p10,p50,p90,q}。
+
+    floor>0：说话人太少时 bootstrap 只反映"一个人的抽样误差"，不代表"人和人能差多少"。
+    所以按 p50 的相对比例设带宽下限——宁可把带放宽，也不制造"±0.5 就明显偏离"的假精度。
+    """
+    q = quantile_list(values)
+    if floor > 0:
+        p50 = q[50]
+        want = abs(p50) * floor
+        lo_half = max(p50 - q[10], want, 1e-9)
+        hi_half = max(q[90] - p50, want, 1e-9)
+        slo = lo_half / max(p50 - q[10], 1e-9)
+        shi = hi_half / max(q[90] - p50, 1e-9)
+        q = [round(p50 - (p50 - x) * slo if x < p50 else p50 + (x - p50) * shi, 4) for x in q]
+        if q[90] - p50 < 1e-9:
+            q = [q[i] if i <= 50 else round(p50 + want * (i - 50) / 50.0, 4) for i in range(101)]
+        if p50 - q[10] < 1e-9 and p50 != 0:
+            q = [q[i] if i >= 50 else round(p50 - want * (50 - i) / 50.0, 4) for i in range(101)]
+    return {"p10": q[10], "p50": q[50], "p90": q[90], "q": q}
+
+
 def _pct(entry, v):
     """v 在人类分布里的百分位（0–100）。有 101 点分位表就用表，否则按三点插值。"""
     q = entry.get("q")

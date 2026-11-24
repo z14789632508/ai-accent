@@ -45,13 +45,21 @@ def cmd_baseline(args):
 
 def cmd_audit(args):
     reg = args.register
-    if not reg:
-        print("--register is required (available: %s)" % ", ".join(B.list_registers()),
-              file=sys.stderr)
+    prof = None
+    if args.profile:
+        from . import profile as PF
+        prof = PF.load(args.profile)
+        base = prof
+        label = "profile:%s" % args.profile
+    elif reg:
+        base = B.load(reg)
+        label = reg
+    else:
+        print("--register or --profile is required (baselines: %s / profiles: %s)"
+              % (", ".join(B.list_registers()), ", ".join(_profiles())), file=sys.stderr)
         return 2
     turns = I.read_corpus(args.corpus)
     rep = M.measure(turns, sentence_bin=args.sentence_bin)
-    base = B.load(reg)
     rows = B.compare(rep, base, experimental=args.experimental)
 
     ci = None
@@ -59,21 +67,36 @@ def cmd_audit(args):
         ci = M.bootstrap_ci(turns, [r["metric"] for r in rows],
                             reps=args.ci_reps, sentence_bin=args.sentence_bin)
 
+    fit = None
+    if prof is not None:
+        from . import profile as PF
+        fit = PF.fit(turns, prof)
+
     if args.json:
-        print(json.dumps({"report": rep, "baseline": reg, "rows": rows,
+        print(json.dumps({"report": rep, "baseline": label, "rows": rows, "fit": fit,
                           "ci": {k: list(v) for k, v in (ci or {}).items()}},
                          ensure_ascii=False, indent=1))
         return 0
 
     print("corpus   %s" % args.corpus)
-    print("register %-11s band=%s" % (reg, base.get("band_method", "?")))
-    print("baseline %s" % base.get("source", ""))
+    print("%-8s %-11s band=%s" % ("profile" if prof else "register", label,
+                                  base.get("band_method", "?")))
+    print("baseline %s" % base.get("source", base.get("profile", "")))
     print("turns %d  chunks %d" % (rep["n_turns"], rep["n_chunks"]))
     print()
     print(_table(rows, ci))
-    print("\npct = 该值在人类分布中的百分位；dev = 偏离该侧带宽的倍数（跨指标不可比）")
+    print("\npct = 该值在%s分布中的百分位；dev = 偏离该侧带宽的倍数（跨指标不可比）"
+          % ("这个人自己的" if prof else "人类"))
+    if fit and fit["total"]:
+        print("\n== 指纹：这套口癖他有没有 ==")
+        print("命中 %d/%d (%.0f%%)  判据：达到此人自身密度的 50%% 以上算在用"
+              % (fit["hits"], fit["total"], 100 * fit["hit_rate"]))
+        for r in fit["rows"]:
+            print("  %s %-6s %5.2f/千字  (他 %5.2f, ×%s)"
+                  % ("✓" if r["hit"] else "·", r["ngram"], r["per_kchar"],
+                     r["person_per_kchar"], r["ratio"]))
     if args.prescribe:
-        adv = P.advise(reg, rep, base, rows, provider=args.provider)
+        adv = P.advise(label, rep, base, rows, provider=args.provider)
         print("\n== sampling ==")
         for k, v in adv["sampling"].items():
             print("  %-18s %s" % (k, v))
@@ -85,6 +108,42 @@ def cmd_audit(args):
         for n in adv["notes"]:
             print("  - " + n)
     return 0
+
+
+def _profiles():
+    try:
+        from . import profile as PF
+        return PF.list_profiles()
+    except Exception:
+        return []
+
+
+def cmd_profile(args):
+    from . import profile as PF
+    if args.action == "list":
+        names = PF.list_profiles()
+        if not names:
+            print("no profiles yet")
+            return 1
+        for n in names:
+            p = PF.load(n)
+            print("%-12s turns=%-5d chunks=%-6d 指纹=%d条  %s"
+                  % (n, p["n_turns"], p["n_chunks"], len(p.get("fingerprint") or []),
+                     "、".join(x["ngram"] for x in (p.get("fingerprint") or [])[:6])))
+        return 0
+
+    turns = I.read_corpus(args.corpus)
+    crowd = I.read_corpus(args.crowd) if args.crowd else None
+    p, prof = PF.build(turns, args.name, crowd_turns=crowd,
+                       replicates=args.replicates, resample_turns=args.resample_turns,
+                       band_floor=args.band_floor, sentence_bin=args.sentence_bin)
+    print("wrote %s  turns=%d chunks=%d 指纹=%d条"
+          % (p, prof["n_turns"], prof["n_chunks"], len(prof["fingerprint"])))
+    for e in prof["fingerprint"][:12]:
+        print("  %-6s %5.2f/千字  人群 %s  超额 ×%s"
+              % (e["ngram"], e["per_kchar"], e["crowd_per_kchar"], e["ratio"]))
+    return 0
+
 
 
 def cmd_diff(args):
@@ -164,7 +223,8 @@ def build():
 
     a = sub.add_parser("audit", help="体检一个语料")
     a.add_argument("corpus")
-    a.add_argument("--register", required=False, help="chat / chat_group / formal / ...（无默认值）")
+    a.add_argument("--register", required=False, help="chat / chat_group / formal / ...")
+    a.add_argument("--profile", required=False, help="个人档案名（baselines/profiles/<name>.json）")
     a.add_argument("--sentence-bin", type=int, default=10)
     a.add_argument("--experimental", action="store_true", help="连实验性指标一起出（默认隐藏）")
     a.add_argument("--ci", action="store_true", help="对被测语料做 bootstrap 95% CI")
@@ -200,6 +260,17 @@ def build():
 
     bl = sub.add_parser("baseline", help="列出已安装的基线")
     bl.set_defaults(func=cmd_baseline)
+
+    pf = sub.add_parser("profile", help="个人档案：像不像某个具体的人")
+    pf.add_argument("action", choices=["build", "list"])
+    pf.add_argument("corpus", nargs="?", help="build 时的语料（turn 级 jsonl/txt）")
+    pf.add_argument("--name", help="档案名，如 yg")
+    pf.add_argument("--crowd", help="人群对照语料（算指纹的超额倍数用；不给就只按频次）")
+    pf.add_argument("--replicates", type=int, default=1000)
+    pf.add_argument("--resample-turns", type=int, default=300)
+    pf.add_argument("--band-floor", type=float, default=0.4)
+    pf.add_argument("--sentence-bin", type=int, default=10)
+    pf.set_defaults(func=cmd_profile)
 
     cp = sub.add_parser("compare-provider", help="同一批 prompt 打多个模型，比谁更像人")
     cp.add_argument("prompts", help="每行一个 prompt 的 jsonl（{p} 或纯文本行）")
