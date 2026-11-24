@@ -294,6 +294,44 @@ aiaccent audit bot.jsonl --profile yg                     # 带结构表 + 指�
 aiaccent audit bot.jsonl --profile yg --prescribe          # 处方按"这个人"的带算
 ```
 
+### 内容层：这段回复是接住了，还是复述了
+
+形状指标全合格，回复里也可能一个具体东西都没接住：
+
+> 用户：周三那场考试我没去
+> 机器：理解你的压力，调整好心态最重要
+
+这件事得用**成对**输入量，所以是单独一条子命令（不是往 `measure` 里加指标）：
+
+```bash
+aiaccent echo pairs.jsonl                                  # 只出复读率
+aiaccent echo pairs.jsonl --common baselines/common_bigrams.json   # 顺带出承接率
+aiaccent echo pairs.jsonl --show 3                         # 看几条"照搬"长什么样
+```
+
+`pairs.jsonl` 每行 `{"ctx": "上一条说的", "reply": "这条回的"}`，用 `scripts/make_pairs.py` 从消息流里切：
+
+```bash
+python scripts/make_pairs.py msgs.jsonl -o pairs.jsonl --gap 120 --src <uid>
+```
+
+两个量的含义完全不同，别混：
+
+| 指标 | 是什么 | 人类 | 大肥鱼 | 说明 |
+|---|---|---|---|---|
+| `echo_rate` | 回复里逐字出现上下文的一段 4 连字 | 3.4%（11/320） | **15.7%（373/2,382）** | 越长越爱抄：21 字以上的上下文，机器 29.6% |
+| `carry_rate` | 回复命中上下文"具体二元组"的比例 | 0.013 | **0.102** | 方向反了，见下 |
+
+**为什么 `carry_rate` 不能当"接住"用**：人聊天会换词。用户说"周三那场考试我没去"，朋友回"那不就没考"——
+同一个意思，字面重叠是 0，承接率是 0。机器不换词，它复述（"好呀，周三那场考试我可以帮你查"），字面重叠反而高。
+所以这个数**高了说明它在学你说话，低了不能说明它没接住**。
+
+结论：字面法只能测复述，测不了接住。接住得走语义（embedding / judge），那会破坏零依赖并且要花钱，
+所以留着当 open problem：`experiments/05_carry.md`。
+
+`baselines/common_bigrams.json` 是「通用词」停止表（52 万条群聊取 top 2000 个二元组），
+用 `python scripts/build_common_bigrams.py <大语料>` 自己生成；不给 `--common` 就只出复读率。
+
 `profile build` 的语料是**一个人**的 turn（用 `scripts/split_dm_uid.py` 把私聊库按说话人切开）；
 `--crowd` 是人群对照，越大越好，用来算"超额多少倍"；不给就退化成按频次排，只能当参考。
 
@@ -376,6 +414,7 @@ aiaccent compare-provider prompts.jsonl \
 | [`experiments/02_baseline_qq_groups.md`](experiments/02_baseline_qq_groups.md) | 基线怎么来的、口径怎么选的、已知偏差 |
 | [`experiments/03_ab_result.md`](experiments/03_ab_result.md) | A/B 实跑（各 300 条）：词级降 44%，结构变整齐 |
 | [`experiments/04_three_arm.md`](experiments/04_three_arm.md) | 补 C 组对照：排除"提示长度"解释，水床成立 |
+| [`experiments/05_carry.md`](experiments/05_carry.md) | 内容层：字面承接率方向反了（机器复述，人换词），捞到可用的复读率 |
 
 ## 相关
 

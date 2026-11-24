@@ -12,6 +12,7 @@ from aiaccent import io as I  # noqa: E402
 from aiaccent import metrics as M  # noqa: E402
 from aiaccent import profile as PF  # noqa: E402
 from aiaccent import adapt as A  # noqa: E402
+from aiaccent import content as C  # noqa: E402
 
 
 class TestMetrics(unittest.TestCase):
@@ -153,6 +154,27 @@ class TestAdapt(unittest.TestCase):
         adv = A.advise(turns)
         self.assertNotIn("模仿", adv["card"])
         self.assertIn("所以输出用这种形态", adv["card"])
+
+
+class TestEcho(unittest.TestCase):
+    def test_echo_true_when_copied(self):
+        self.assertTrue(C.is_echo("周三那场考试我没去", "好呀周三那场考试我没去，那就下次"))
+        self.assertTrue(C.is_echo("我养了一条金鱼", "养了一条金鱼？叫什么名字"))
+
+    def test_echo_false_when_paraphrased(self):
+        # 人聊天会换词：同一个意思，字面重叠为零
+        self.assertFalse(C.is_echo("周三那场考试我没去", "那不就没考，下次补考吧"))
+        self.assertFalse(C.is_echo("我养了一条金鱼", "什么鱼啊，取名字没"))
+
+    def test_short_ctx_never_echo(self):
+        self.assertFalse(C.is_echo("好啊", "好啊"))
+
+    def test_echo_stats_counts(self):
+        pairs = [("我养了一条金鱼", "养了一条金鱼？"), ("周三考试我没去", "下次补考")]
+        st = C.echo_stats(pairs)
+        self.assertEqual(st["n"], 2)
+        self.assertEqual(st["echo_n"], 1)
+        self.assertEqual(st["echo_rate"], 0.5)
 
 
 class TestIO(unittest.TestCase):

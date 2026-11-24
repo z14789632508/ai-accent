@@ -198,6 +198,35 @@ def cmd_mine(args):
     return 0
 
 
+def cmd_echo(args):
+    from . import content as C
+    pairs = C.read_pairs(args.pairs)
+    if not pairs:
+        print("没有可用的 pair（每行需要 {\"ctx\": …, \"reply\": …}）", file=sys.stderr)
+        return 2
+    st = C.echo_stats(pairs, n=args.n, worst=args.show)
+    out = dict(st)
+    if args.common:
+        with open(args.common, encoding="utf-8") as f:
+            common = set(json.load(f)["bigrams"])
+        out["carry"] = C.carry_stats(pairs, common)
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+        return 0
+    print("pairs %d   判据：回复里逐字出现上下文的一段 %d 连字" % (st["n"], st["min_chars"]))
+    print()
+    print("复读率 %.1f%%  (%d/%d)" % (100 * st["echo_rate"], st["echo_n"], st["n"]))
+    print("参考  人 3.8% / 机器 16.3%（QQ 私聊，见 experiments/05；样本量不同别直接比绝对值）")
+    if "carry" in out and out["carry"]["n"]:
+        c = out["carry"]
+        print("\n承接率 %.3f  接住比例 %.3f  (n=%d，复读的对计 0)"
+              % (c["carry_rate"], c["carry_hit"], c["n"]))
+        print("注意  人聊天会换词，承接率低不等于没接住；这一项要配复读率一起读")
+    for e in st.get("examples") or []:
+        print("\n  ctx: %s\n  rep: %s" % (e["ctx"][:60], e["reply"][:60]))
+    return 0
+
+
 def cmd_compare_provider(args):
     from . import providers as PR
     base = B.load(args.register)
@@ -290,6 +319,14 @@ def build():
     pf.add_argument("--band-floor", type=float, default=0.4)
     pf.add_argument("--sentence-bin", type=int, default=10)
     pf.set_defaults(func=cmd_profile)
+
+    ec = sub.add_parser("echo", help="内容层：这段回复是接住了还是复述了（吃成对的 ctx/reply）")
+    ec.add_argument("pairs", help="jsonl，每行 {\"ctx\": 上下文, \"reply\": 回复}")
+    ec.add_argument("-n", type=int, default=4, help="判复读的连字长度（默认 4）")
+    ec.add_argument("--common", help="通用二元组表 json（给了才算承接率）")
+    ec.add_argument("--show", type=int, default=0, help="打几条照搬的例子")
+    ec.add_argument("--json", action="store_true")
+    ec.set_defaults(func=cmd_echo)
 
     cp = sub.add_parser("compare-provider", help="同一批 prompt 打多个模型，比谁更像人")
     cp.add_argument("prompts", help="每行一个 prompt 的 jsonl（{p} 或纯文本行）")
