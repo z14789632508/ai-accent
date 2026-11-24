@@ -11,6 +11,7 @@ from aiaccent import baseline as B  # noqa: E402
 from aiaccent import io as I  # noqa: E402
 from aiaccent import metrics as M  # noqa: E402
 from aiaccent import profile as PF  # noqa: E402
+from aiaccent import adapt as A  # noqa: E402
 
 
 class TestMetrics(unittest.TestCase):
@@ -138,6 +139,20 @@ class TestProfile(unittest.TestCase):
     def test_build_rejects_too_few_turns(self):
         with self.assertRaises(ValueError):
             PF.build([["a"]] * 3, "tiny", replicates=5)
+
+
+class TestAdapt(unittest.TestCase):
+    def test_rules_capped(self):
+        turns = [["行", "嗯", "走吧", "没事"], ["哈", "好"]] * 200
+        adv = A.advise(turns, max_rules=2)
+        self.assertLessEqual(len(adv["features"]), 2)
+        self.assertIn("这个用户习惯", adv["card"])
+
+    def test_wording_is_shape_not_imitation(self):
+        turns = [["行", "嗯", "走吧"] * 40] * 60
+        adv = A.advise(turns)
+        self.assertNotIn("模仿", adv["card"])
+        self.assertIn("所以输出用这种形态", adv["card"])
 
 
 class TestIO(unittest.TestCase):

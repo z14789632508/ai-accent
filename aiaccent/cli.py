@@ -118,6 +118,19 @@ def _profiles():
         return []
 
 
+def cmd_adapt(args):
+    from . import adapt as A
+    turns = I.read_corpus(args.corpus)
+    adv = A.advise(turns, max_rules=args.max_rules)
+    if args.json:
+        print(json.dumps(adv, ensure_ascii=False, indent=1))
+        return 0
+    print("语料 %s  turns=%d" % (args.corpus, adv["n_turns"]))
+    print("触发 %d 条形态规则（上限 %d，多了会被当噪声）\n" % (len(adv["features"]), args.max_rules))
+    print(adv["card"])
+    return 0
+
+
 def cmd_profile(args):
     from . import profile as PF
     if args.action == "list":
@@ -260,6 +273,12 @@ def build():
 
     bl = sub.add_parser("baseline", help="列出已安装的基线")
     bl.set_defaults(func=cmd_baseline)
+
+    ad = sub.add_parser("adapt", help="从这个人的历史消息里读 3 条结构指令（不学用词）")
+    ad.add_argument("corpus")
+    ad.add_argument("--max-rules", type=int, default=3)
+    ad.add_argument("--json", action="store_true")
+    ad.set_defaults(func=cmd_adapt)
 
     pf = sub.add_parser("profile", help="个人档案：像不像某个具体的人")
     pf.add_argument("action", choices=["build", "list"])
