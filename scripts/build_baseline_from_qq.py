@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from aiaccent import metrics as M  # noqa: E402
 
 KEYS = ["chunk_len_p10", "chunk_len_p50", "chunk_len_p90", "chunk_len_cv", "end_punct_rate",
+        "hedge_per_kchar", "hedge_chunk_share",
         "turn_chunks_median", "turn_share_1", "turn_share_3", "turn_chunks_entropy",
         "within_turn_cv_median", "sentence_len_entropy"]
 

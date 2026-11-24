@@ -68,6 +68,8 @@ FLAG = {
     ("turn_share_3", "above"): "恰好 3 段占 {v:.0%}（人类 {mid:.0%}）：不是禁止三段，是让段数跟着内容走。",
     ("turn_chunks_entropy", "below"): "连发条数太可预测（熵 {v:.2f}，人类 {mid:.2f}）：偶尔只发一条就停。",
     ("within_turn_cv_median", "below"): "段内长度太整齐（CV {v:.2f}，人类 {mid:.2f}）：长短交错，允许参差。",
+    ("hedge_per_kchar", "above"): "对冲词 {v} 次/千字（人类 {mid}）：「不过/可能/大概/建议」这类词在给结论留后路，删掉一半再读一遍，语气会更像在聊天。",
+    ("hedge_chunk_share", "above"): "含对冲词的消息占 {v:.0%}（人类 {mid:.0%}）：不是禁用这些词，是别每条都补一句缓冲。",
 }
 
 

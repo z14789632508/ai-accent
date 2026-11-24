@@ -18,6 +18,19 @@ END_PUNCT = "。！？!?…~～.…」』）)】”\"'"
 # chunk 长度低于这个值不计入 within-turn CV（太短没有形状可言）
 MIN_CHUNK_FOR_SHAPE = 2
 
+# 对冲词（hedge）：模型的"安全感"语气——先给结论再补一层"不过/可能/建议"。
+# 词表内不做前缀重叠（有"建议"就不再放"建议你"），否则一处命中算两次。
+HEDGE = (
+    "不过", "建议", "仅供参考", "请务必", "一般来说", "在一般情况下",
+    "通常情况下", "如有需要", "需要注意的是", "值得注意的是",
+    "或许", "大概", "也许", "似乎", "应该", "通常", "可能",
+    "酌情", "视情况",
+)
+
+
+def count_hedges(chunk):
+    return sum(chunk.count(w) for w in HEDGE)
+
 
 def _cv(xs):
     xs = [x for x in xs if x > 0]
@@ -79,6 +92,18 @@ def measure(turns, sentence_bin=10):
             sent_lens.append(cur)
     sent_ent = entropy(Counter(x // sentence_bin for x in sent_lens)) if sent_lens else 0.0
 
+    # 对冲密度：每千字命中次数 + 含对冲词的 chunk 占比。
+    # 为什么要两个：次数密度对"话痨 but 每次只放一个对冲词"敏感，占比对
+    # "短句里也塞一句'不过'"敏感——模型的病是后者（见 README 实测）。
+    total_chars = sum(len(c) for c in chunks) or 1
+    hedge_hits = 0
+    hedge_chunk = 0
+    for c in chunks:
+        n = count_hedges(c)
+        hedge_hits += n
+        if n:
+            hedge_chunk += 1
+
     return {
         "n_turns": len(turns),
         "n_chunks": len(chunks),
@@ -88,6 +113,8 @@ def measure(turns, sentence_bin=10):
         "chunk_len_mean": round(statistics.fmean(lens), 2),
         "chunk_len_cv": round(_cv(lens), 3),
         "end_punct_rate": round(sum(ends_with_punct(c) for c in chunks) / len(chunks), 3),
+        "hedge_per_kchar": round(hedge_hits * 1000 / total_chars, 2),
+        "hedge_chunk_share": round(hedge_chunk / len(chunks), 3),
         "turn_chunks_median": statistics.median(turn_sizes),
         "turn_chunks_mean": round(statistics.fmean(turn_sizes), 2),
         "turn_share_1": round(size_dist[1] / len(turns), 3),
@@ -130,6 +157,8 @@ DIRECTION = {
     "chunk_len_p50": 0,
     "chunk_len_cv": 0,
     "end_punct_rate": -1,
+    "hedge_per_kchar": -1,
+    "hedge_chunk_share": -1,
     "turn_chunks_median": 0,
     "turn_share_3": -1,
     "turn_chunks_entropy": 1,

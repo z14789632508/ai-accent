@@ -91,6 +91,26 @@ class TestBaseline(unittest.TestCase):
         self.assertIn("sentence_len_entropy", names)
 
 
+class TestHedge(unittest.TestCase):
+    def test_counts_each_occurrence(self):
+        self.assertEqual(M.count_hedges("不过这个可能吧"), 2)
+
+    def test_no_prefix_double_count(self):
+        # 词表里没有"建议你"，只数一次
+        self.assertEqual(M.count_hedges("建议你去看看"), 1)
+
+    def test_clean_text_is_zero(self):
+        self.assertEqual(M.count_hedges("今天吃了碗面"), 0)
+
+    def test_metric_in_report_and_direction(self):
+        r = M.measure([["不过我觉得可能", "行"]])
+        self.assertIn("hedge_per_kchar", r)
+        self.assertIn("hedge_chunk_share", r)
+        self.assertGreater(r["hedge_per_kchar"], 0)
+        self.assertEqual(M.DIRECTION["hedge_per_kchar"], -1)
+        self.assertIn("hedge_per_kchar", B.CORE)
+
+
 class TestIO(unittest.TestCase):
     def test_jsonl_roundtrip(self):
         turns = [["a", "b"], ["c"]]
