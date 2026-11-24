@@ -43,12 +43,18 @@ def bigrams(text):
 
 
 def load_common():
+    """只收纯汉字二元组。
+
+    第一版没过滤，最常见的几个是 `\x0e>`、`",`、`$ǿ`、`*1` —— 机器人消息和代码残留。
+    表一脏，carry_rate 的分母就偏：真正具体的专名会被当"通用词"剔掉。
+    """
     c = Counter()
     with open(GROUP, encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
             for g in bigrams(r.get("t") or ""):
-                c[g] += 1
+                if all("\u4e00" <= ch <= "\u9fff" for ch in g):
+                    c[g] += 1
     return set(g for g, _ in c.most_common(TOP_COMMON))
 
 

@@ -5,10 +5,13 @@ data/
 !examples/*.md
 !examples/sample.jsonl
 
+# 个人档案是"这个人怎么说话"，属于隐私，不进仓库（demo 是合成语料生成的）
+baselines/profiles/*.json
+!baselines/profiles/demo.json
+
 __pycache__/
 *.pyc
-*.pyo
-.venv/
+*.pyo.venv/
 venv/
 build/
 dist/
