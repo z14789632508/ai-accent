@@ -412,6 +412,10 @@ aiaccent compare-provider prompts.jsonl \
 | [`experiments/03_ab_result.md`](experiments/03_ab_result.md) | A/B 实跑（各 300 条）：词级降 44%，结构变整齐 |
 | [`experiments/04_three_arm.md`](experiments/04_three_arm.md) | 补 C 组对照：排除"提示长度"解释，水床成立 |
 | [`experiments/05_carry.md`](experiments/05_carry.md) | 内容层：字面承接率方向反了（机器复述，人换词），捞到可用的复读率 |
+| [`experiments/06_validate.md`](experiments/06_validate.md) | **验收实验（预注册，未跑）**：改完到底有没有变好——四臂含随机扰动臂、留出指标、四种判官分级 |
+
+目前最大的空白在这里：**所有数字都在说"离人多远"，没有一个在说"改了之后离人近了多远"。**
+没有 06，`audit → prescribe → adapt` 就只是把 `Human Score` 换成了 `dev`，仍是同一个优化环。
 
 ## 相关
 
