@@ -55,6 +55,21 @@ class TestMetrics(unittest.TestCase):
 
 
 class TestBaseline(unittest.TestCase):
+    def test_list_registers_skips_non_baselines(self):
+        """baselines/ 里还有指纹库与二元组表，它们不该被当成 register（CI 曾因此 KeyError）。"""
+        regs = B.list_registers()
+        self.assertIn("chat", regs)
+        self.assertNotIn("common_bigrams", regs)
+        for name in regs:
+            b = B.load(name)
+            self.assertTrue(B.is_baseline(b), name)
+
+    def test_is_baseline_rejects_junk(self):
+        self.assertFalse(B.is_baseline([["的", "了"]]))
+        self.assertFalse(B.is_baseline({"fingerprint": [], "metrics": {}}))
+        self.assertTrue(B.is_baseline(
+            {"n_turns": 1, "n_chunks": 2, "metrics": {"chunk_len_p50": {}}}))
+
     def _base(self):
         return {"metrics": {"chunk_len_p50": {"p10": 7, "p50": 9, "p90": 16}}}
 

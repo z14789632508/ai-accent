@@ -45,10 +45,28 @@ def load(register):
         return json.load(f)
 
 
+def is_baseline(obj):
+    """是不是一份人群基线（不是指纹库、也不是二元组表）。"""
+    return (isinstance(obj, dict) and "n_turns" in obj
+            and "n_chunks" in obj and isinstance(obj.get("metrics"), dict)
+            and any(k in obj["metrics"] for k in CORE))
+
+
 def list_registers():
     if not os.path.isdir(BASE_DIR):
         return []
-    return sorted(x[:-5] for x in os.listdir(BASE_DIR) if x.endswith(".json"))
+    out = []
+    for x in sorted(os.listdir(BASE_DIR)):
+        if not x.endswith(".json"):
+            continue
+        name = x[:-5]
+        try:
+            if is_baseline(load(name)):
+                out.append(name)
+        except (ValueError, OSError):
+            continue
+    return out
+
 
 
 SEVERE = 2.0   # 偏离达到 2 个带宽算"明显"

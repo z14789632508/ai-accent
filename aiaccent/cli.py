@@ -357,6 +357,11 @@ def build():
 
 
 def main(argv=None):
+    # Windows 控制台默认 GBK，中文/emoji 会抛 UnicodeEncodeError；改不动就算了
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
     p = build()
     args = p.parse_args(argv)
     return args.func(args)
