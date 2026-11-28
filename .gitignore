@@ -4,6 +4,7 @@ data/
 *.out
 !examples/*.md
 !examples/sample.jsonl
+!examples/pairs.jsonl
 
 # 个人档案是"这个人怎么说话"，属于隐私，不进仓库（demo 是合成语料生成的）
 baselines/profiles/*.json
