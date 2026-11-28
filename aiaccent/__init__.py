@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """ai-accent：AI 口音的体检表。不看词，看分布。"""
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"

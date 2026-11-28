@@ -122,14 +122,16 @@ def cmd_adapt(args):
     from . import adapt as A
     turns = I.read_corpus(args.corpus)
     mturns = I.read_corpus(args.model) if getattr(args, "model", None) else None
-    adv = A.advise(turns, model_turns=mturns, max_user=args.max_rules, max_tics=args.max_tics)
+    adv = A.advise(turns, model_turns=mturns, max_user=args.max_rules,
+                   max_tics=args.max_tics, max_rel=args.max_rel)
     if args.json:
         print(json.dumps(adv, ensure_ascii=False, indent=1))
         return 0
     print("语料 %s  turns=%d" % (args.corpus, adv["n_turns"]))
-    print("形态规则 %d 条（上限 %d） / 模型毛病 %d 条（上限 %d）\n"
+    print("形态规则 %d 条（上限 %d） / 模型毛病 %d 条（上限 %d） / 交往规则 %d 条（上限 %d）\n"
           % (len(adv["user_style"]), args.max_rules,
-             len(adv["model_tics"]), args.max_tics))
+             len(adv["model_tics"]), args.max_tics,
+             len(adv["relation"]), args.max_rel))
     print(adv["card"])
     return 0
 
@@ -312,6 +314,8 @@ def build():
                     help="用户风格指令条数上限（默认 2，多了模型会挑一条执行）")
     ad.add_argument("--max-tics", type=int, default=2,
                     help="模型毛病指令条数上限（默认 2）")
+    ad.add_argument("--max-rel", type=int, default=2,
+                    help="交往规则条数上限（默认 2，0 = 只开结构药）")
     ad.add_argument("--model",
                     help="助手自己的输出语料（turn 级）；给了就实测毛病，不给用实验 06 的默认画像")
     ad.add_argument("--json", action="store_true")

@@ -183,6 +183,26 @@ class TestAdapt(unittest.TestCase):
         card = A.advise(turns)["card"]
         self.assertIn("短的是信息，不是态度", card)
 
+    def test_relation_off_by_zero(self):
+        turns = [["行", "嗯", "走吧"] * 40] * 60
+        adv = A.advise(turns, max_rel=0)
+        self.assertEqual(adv["relation"], [])
+        self.assertNotIn("损一句", adv["card"])
+
+    def test_relation_capped_and_labelled(self):
+        turns = [["行", "嗯"] * 40] * 60
+        adv = A.advise(turns, max_rel=1)
+        self.assertEqual(len(adv["relation"]), 1)
+        self.assertEqual(adv["relation"][0]["key"], "roast")
+        self.assertIn("关系近的时候", adv["card"])
+
+    def test_relation_not_imitation(self):
+        # 交往规则是行为，不是学舌：不许出现"模仿""像他那样说"
+        turns = [["行", "嗯"] * 40] * 60
+        card = A.advise(turns, max_rel=5)["card"]
+        self.assertNotIn("模仿", card)
+        self.assertNotIn("像他那样说", card)
+
 
 class TestEcho(unittest.TestCase):
     def test_echo_true_when_copied(self):
