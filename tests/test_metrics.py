@@ -145,7 +145,7 @@ class TestProfile(unittest.TestCase):
 class TestAdapt(unittest.TestCase):
     def test_rules_capped(self):
         turns = [["行", "嗯", "走吧", "没事"], ["哈", "好"]] * 200
-        adv = A.advise(turns, max_rules=2)
+        adv = A.advise(turns, max_user=2)
         self.assertLessEqual(len(adv["features"]), 2)
         self.assertIn("这个用户习惯", adv["card"])
 
@@ -154,6 +154,34 @@ class TestAdapt(unittest.TestCase):
         adv = A.advise(turns)
         self.assertNotIn("模仿", adv["card"])
         self.assertIn("所以输出用这种形态", adv["card"])
+
+    def test_two_medicines_are_separate(self):
+        # 用户短句触发 user_style；不给模型语料时用实验 06 的默认画像触发 model_tics
+        turns = [["行", "嗯", "走吧"] * 40] * 60
+        adv = A.advise(turns)
+        self.assertTrue(adv["user_style"])
+        self.assertTrue(adv["model_tics"])
+        for t in adv["model_tics"]:
+            self.assertFalse(t["measured"])
+        self.assertIn("这个模型的毛病", adv["card"])
+
+    def test_measured_model_tics_can_skip(self):
+        # 模型输出很干净 → 不给毛病指令（注意别用"吧/呢/吗"结尾，那算问回去）
+        clean = [["行", "嗯", "好的"]] * 60
+        adv = A.advise([["行", "嗯"] * 40] * 60, model_turns=clean, max_user=3, max_tics=3)
+        self.assertEqual(adv["model_tics"], [])
+
+    def test_no_absolute_wording(self):
+        turns = [["行。", "嗯。", "走吧。"]] * 80
+        card = A.advise(turns)["card"]
+        self.assertNotIn("不用句号", card)
+        if "句号" in card:
+            self.assertIn("很少", card)
+
+    def test_keep_warm_clause_present(self):
+        turns = [["行", "嗯", "走吧"] * 40] * 60
+        card = A.advise(turns)["card"]
+        self.assertIn("短的是信息，不是态度", card)
 
 
 class TestEcho(unittest.TestCase):

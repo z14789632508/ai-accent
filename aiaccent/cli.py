@@ -121,12 +121,15 @@ def _profiles():
 def cmd_adapt(args):
     from . import adapt as A
     turns = I.read_corpus(args.corpus)
-    adv = A.advise(turns, max_rules=args.max_rules)
+    mturns = I.read_corpus(args.model) if getattr(args, "model", None) else None
+    adv = A.advise(turns, model_turns=mturns, max_user=args.max_rules, max_tics=args.max_tics)
     if args.json:
         print(json.dumps(adv, ensure_ascii=False, indent=1))
         return 0
     print("语料 %s  turns=%d" % (args.corpus, adv["n_turns"]))
-    print("触发 %d 条形态规则（上限 %d，多了会被当噪声）\n" % (len(adv["features"]), args.max_rules))
+    print("形态规则 %d 条（上限 %d） / 模型毛病 %d 条（上限 %d）\n"
+          % (len(adv["user_style"]), args.max_rules,
+             len(adv["model_tics"]), args.max_tics))
     print(adv["card"])
     return 0
 
@@ -305,7 +308,12 @@ def build():
 
     ad = sub.add_parser("adapt", help="从这个人的历史消息里读 3 条结构指令（不学用词）")
     ad.add_argument("corpus")
-    ad.add_argument("--max-rules", type=int, default=3)
+    ad.add_argument("--max-rules", type=int, default=2,
+                    help="用户风格指令条数上限（默认 2，多了模型会挑一条执行）")
+    ad.add_argument("--max-tics", type=int, default=2,
+                    help="模型毛病指令条数上限（默认 2）")
+    ad.add_argument("--model",
+                    help="助手自己的输出语料（turn 级）；给了就实测毛病，不给用实验 06 的默认画像")
     ad.add_argument("--json", action="store_true")
     ad.set_defaults(func=cmd_adapt)
 
