@@ -205,7 +205,12 @@ def cmd_mine(args):
 
 def cmd_echo(args):
     from . import content as C
-    pairs = C.read_pairs(args.pairs)
+    try:
+        pairs = C.read_pairs(args.pairs)
+    except FileNotFoundError:
+        print("找不到 %s（每行一个 {\"ctx\": …, \"reply\": …}；示例见 examples/pairs.jsonl）"
+              % args.pairs, file=sys.stderr)
+        return 2
     if not pairs:
         print("没有可用的 pair（每行需要 {\"ctx\": …, \"reply\": …}）", file=sys.stderr)
         return 2
